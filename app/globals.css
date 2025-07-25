@@ -1,0 +1,72 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+}
+
+@layer utilities {
+  .pixel-font {
+    font-family: "Courier New", "Monaco", "Menlo", monospace;
+    font-weight: bold;
+    font-size: 0.875rem;
+    line-height: 1.6;
+    letter-spacing: 0.05em;
+  }
+
+  .pixel-text-xs {
+    font-size: 0.75rem;
+  }
+
+  .pixel-text-sm {
+    font-size: 0.875rem;
+  }
+
+  .pixel-text-lg {
+    font-size: 1.125rem;
+  }
+
+  .pixel-text-xl {
+    font-size: 1.25rem;
+  }
+
+  .pixel-text-2xl {
+    font-size: 1.5rem;
+  }
+
+  .pixel-text-4xl {
+    font-size: 2.25rem;
+  }
+
+  .pixelated {
+    image-rendering: -moz-crisp-edges;
+    image-rendering: -webkit-crisp-edges;
+    image-rendering: pixelated;
+    image-rendering: crisp-edges;
+  }
+}
+
+/* Custom scrollbar for battle log */
+::-webkit-scrollbar {
+  width: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: #8b9dc3;
+  border: 1px solid black;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #3b4a6b;
+  border: 1px solid black;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #5a6b8c;
+}
