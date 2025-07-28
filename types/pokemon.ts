@@ -280,8 +280,9 @@ export const battleBackgrounds: BattleBackground[] = [
     style: "image",
   },
   {
-    name: "Beach",
+    name: "Lake",
     gradient: "linear-gradient(135deg, #03A9F4 0%, #FFEB3B 100%)",
-    style: "gradient",
+    image: "/images/pixelBattleArena_lake.png",
+    style: "image",
   },
 ];
