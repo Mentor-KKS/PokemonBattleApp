@@ -78,7 +78,8 @@ export default function BattleMenus({
               <div className="flex flex-col items-center">
                 <span className="font-bold">{move.name}</span>
                 <span className="text-xs opacity-75 mt-1">
-                  {move.type.toUpperCase()} | {move.power} | CD: {move.cooldown}
+                  {move.type.toUpperCase()} | {move.power} | CD: {move.cooldown}{" "}
+                  | MC: {move.maxCooldown}
                 </span>
               </div>
             </RetroButton>

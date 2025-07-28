@@ -22,6 +22,16 @@ import {
   loadProgress,
   formatEffectivenessText,
 } from "@/utils/battleUtils";
+import { selectBestMoves, validateMoveSet } from "@/utils/moveUtils";
+import {
+  calculateDifficultyStats,
+  getWeightedPokemonSelection,
+  calculateRewards,
+  applyRoundEffects,
+  getTrainerName,
+  getDifficultyDescription,
+  calculateEnemyLevel,
+} from "@/utils/difficultyUtils";
 
 type BattlePhase =
   | "select"
@@ -81,6 +91,23 @@ export default function BattleArena() {
     const newTeam = [...playerTeam];
     newTeam.forEach((p) => (p.isActive = false));
     newTeam[index].isActive = true;
+
+    // Prüfe und korrigiere ungültige Moves für Spieler-Pokémon
+    const playerPokemon = newTeam[index];
+    const validation = validateMoveSet(playerPokemon.moves);
+
+    if (!validation.isValid) {
+      const validMoves = selectBestMoves(playerPokemon.availableMoves);
+      newTeam[index].moves = validMoves;
+      savePokemonMoves(playerPokemon.id, validMoves);
+
+      setBattleLog((prev) => [
+        ...prev,
+        `Moves für ${playerPokemon.name} wurden automatisch optimiert!`,
+        `Grund: ${validation.errors.join(", ")}`,
+      ]);
+    }
+
     setPlayerTeam(newTeam);
     setPlayerActivePokemon(index);
     generateEnemyTrainer();
@@ -88,31 +115,15 @@ export default function BattleArena() {
 
   const generateEnemyTrainer = async () => {
     try {
-      const trainerNames = [
-        "Käfer-Sammler",
-        "Youngster",
-        "Lass",
-        "Gentleman",
-        "Elite Vier",
-        "Champ",
-      ];
-      const trainerName =
-        trainerNames[Math.min(currentRound - 1, trainerNames.length - 1)];
-
+      const trainerName = getTrainerName(currentRound);
+      const difficulty = calculateDifficultyStats(currentRound);
       const enemyTeam: BattlePokemon[] = [];
       const usedIds = new Set<number>();
-
-      const difficultyMultiplier = Math.min(
-        0.5 + (currentRound - 1) * 0.15,
-        2.0
-      );
 
       for (let i = 0; i < 6; i++) {
         let randomId: number;
         do {
-          const minId = Math.min(1 + currentRound * 10, 100);
-          const maxId = Math.min(minId + 50, 151);
-          randomId = Math.floor(Math.random() * (maxId - minId + 1)) + minId;
+          randomId = getWeightedPokemonSelection(currentRound);
         } while (usedIds.has(randomId));
 
         usedIds.add(randomId);
@@ -121,12 +132,20 @@ export default function BattleArena() {
           `https://pokeapi.co/api/v2/pokemon/${randomId}`
         );
         const pokemon = await response.json();
-        const hp =
+
+        // Basis HP aus API
+        const baseHp =
           pokemon.stats.find((s: any) => s.stat.name === "hp")?.base_stat || 50;
 
-        const scaledHp = Math.floor(hp * difficultyMultiplier);
+        const scaledHp = Math.floor(baseHp * difficulty.hpMultiplier);
         const availableMoves = await getAllPokemonMoves(randomId);
-        const selectedMoves = availableMoves.slice(0, 4);
+        const selectedMoves = selectBestMoves(availableMoves);
+
+        // Stats-Skalierung
+        const scaledStats = pokemon.stats.map((stat: any) => ({
+          ...stat,
+          base_stat: Math.floor(stat.base_stat * difficulty.statMultiplier),
+        }));
 
         enemyTeam.push({
           ...pokemon,
@@ -136,26 +155,29 @@ export default function BattleArena() {
           moves: selectedMoves,
           availableMoves: availableMoves,
           originalMoves: pokemon.moves,
-          stats: pokemon.stats.map((stat: any) => ({
-            ...stat,
-            base_stat: Math.floor(stat.base_stat * difficultyMultiplier),
-          })),
+          stats: scaledStats,
+          level: calculateEnemyLevel(currentRound, randomId),
         });
       }
 
+      const enhancedEnemyTeam = applyRoundEffects(currentRound, enemyTeam);
+
       setEnemyTrainer({
         name: trainerName,
-        team: enemyTeam,
+        team: enhancedEnemyTeam,
       });
 
       setEnemyActivePokemon(0);
       resetCooldowns();
       setIsPlayerTurn(true);
       setBattlePhase("battle");
+
+      const difficultyInfo = getDifficultyDescription(difficulty);
       setBattleLog([
         `Trainer ${trainerName} fordert dich heraus!`,
+        ...difficultyInfo,
         `${playerTeam[playerActivePokemon].name} betritt den Kampf!`,
-        `${enemyTeam[0].name} betritt den Kampf!`,
+        `${enhancedEnemyTeam[0].name} betritt den Kampf!`,
       ]);
     } catch (error) {
       console.error("Error generating enemy trainer:", error);
@@ -321,7 +343,7 @@ export default function BattleArena() {
 
   const handlePokemonDefeated = (isEnemyDefeated: boolean) => {
     if (isEnemyDefeated) {
-      const pokemonPoints = 20 * currentRound;
+      const pokemonPoints = calculateRewards(currentRound, false);
       const newScore = playerScore + pokemonPoints;
       setPlayerScore(newScore);
       localStorage.setItem("battleScore", newScore.toString());
@@ -334,10 +356,12 @@ export default function BattleArena() {
 
       setTimeout(() => {
         if (!switchToNextPokemon(false)) {
-          // Trainer defeated
-          const trainerBonus = 50 * currentRound;
+          const trainerBonus = calculateRewards(currentRound, true);
           const finalScore = newScore + trainerBonus;
-          saveProgress(finalScore, currentRound + 1);
+          const nextRound = currentRound + 1;
+          setCurrentRound(nextRound);
+          setPlayerScore(finalScore);
+          saveProgress(finalScore, nextRound);
           setBattleLog((prev) => [
             ...prev,
             `Du hast Trainer ${enemyTrainer?.name} besiegt!`,
@@ -449,10 +473,10 @@ export default function BattleArena() {
   };
 
   const updatePokemonMoves = (newMoves: Move[]) => {
-    const totalCost = newMoves.reduce((total, move) => total + move.cost, 0);
+    const validation = validateMoveSet(newMoves);
 
-    if (totalCost > 12) {
-      alert("Deine Attacken dürfen maximal 12 Kostenpunkte haben!");
+    if (!validation.isValid) {
+      alert(`Ungültige Move-Auswahl:\n${validation.errors.join("\n")}`);
       return;
     }
 
@@ -482,6 +506,9 @@ export default function BattleArena() {
     setShowMoveMenu(false);
     setBattleAnimation({ type: "", attacker: "", target: "" });
     setIsPlayerTurn(true);
+    setCurrentRound(1);
+    setPlayerScore(0);
+    saveProgress(0, 1);
     loadTeam();
   };
 
@@ -563,8 +590,11 @@ export default function BattleArena() {
 
   const skipScoreSave = () => {
     saveProgress(0, 1);
+    setCurrentRound(1);
+    setPlayerScore(0);
     setShowScoreSave(false);
     setFinalScore(0);
+    setBattlePhase("select");
   };
 
   // Handle enemy turn

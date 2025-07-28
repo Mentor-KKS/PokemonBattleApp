@@ -1,6 +1,7 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import RetroButton from "./retro-button";
-import { Move, BattlePokemon } from "../types/pokemon";
+import { Move, BattlePokemon } from "@/types/pokemon";
+import { selectBestMoves, validateMoveSet } from "@/utils/moveUtils";
 
 interface MoveSelectionProps {
   pokemon: BattlePokemon;
@@ -15,7 +16,23 @@ export default function MoveSelection({
   onCancel,
   initialMoves = [],
 }: MoveSelectionProps) {
-  const [selectedMoves, setSelectedMoves] = useState<Move[]>(initialMoves);
+  const [selectedMoves, setSelectedMoves] = useState<Move[]>([]);
+
+  useEffect(() => {
+    if (initialMoves.length > 0) {
+      const validation = validateMoveSet(initialMoves);
+
+      if (validation.isValid) {
+        setSelectedMoves(initialMoves);
+      } else {
+        const autoSelectedMoves = selectBestMoves(pokemon.availableMoves);
+        setSelectedMoves(autoSelectedMoves);
+      }
+    } else {
+      const autoSelectedMoves = selectBestMoves(pokemon.availableMoves);
+      setSelectedMoves(autoSelectedMoves);
+    }
+  }, [pokemon.availableMoves, initialMoves]);
 
   const currentCost = selectedMoves.reduce(
     (total, move) => total + move.cost,
@@ -31,29 +48,39 @@ export default function MoveSelection({
     }
   };
 
-  return (
-    <div className="space-y-4">
-      <div className="bg-white border-4 border-black p-4 text-center">
-        <h2 className="pixel-font font-bold text-gameboy-darkest mb-2">
-          ATTACKEN FÜR {pokemon.name.toUpperCase()} WÄHLEN
-        </h2>
-        <p className="pixel-font text-sm text-gray-600">
-          Wähle 4 Attacken ({selectedMoves.length}/4)
-        </p>
-        <div className="mt-2 pixel-font text-sm">
-          <span className="text-gameboy-darkest">Kosten: {currentCost}/12</span>
-          <span className="text-gray-600 ml-4">Verfügbar: {remainingCost}</span>
-        </div>
-        <div className="mt-2 bg-gray-300 border border-black h-3 w-48 mx-auto">
-          <div
-            className="bg-gameboy-medium h-full transition-all duration-300"
-            style={{ width: `${(currentCost / 12) * 100}%` }}
-          />
-        </div>
-      </div>
+  const canConfirm = () => {
+    const validation = validateMoveSet(selectedMoves);
+    return validation.isValid;
+  };
 
-      <div className="bg-white border-4 border-black p-4">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 max-h-96 overflow-y-auto">
+  const handleConfirm = () => {
+    if (canConfirm()) {
+      onConfirm(selectedMoves);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-75 flex items-center justify-center z-50">
+      <div className="bg-gameboy-light border-4 border-black p-6 rounded-lg max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="text-center mb-4">
+          <h2 className="pixel-font text-lg font-bold text-gameboy-darkest mb-2">
+            ATTACKEN FÜR {pokemon.name.toUpperCase()} WÄHLEN
+          </h2>
+          <p className="pixel-font text-sm text-gameboy-darkest mb-2">
+            Wähle 4 Attacken ({selectedMoves.length}/4)
+          </p>
+          <div className="flex justify-between pixel-font text-xs text-gameboy-darkest">
+            <span>Kosten: {currentCost}/12</span>
+            <span>Verfügbar: {remainingCost}</span>
+          </div>
+          {!selectedMoves.some((move) => move.maxCooldown === 0) && (
+            <p className="pixel-font text-xs text-red-600 mt-1">
+              ⚠️ Mindestens eine Attacke mit Cooldown 0 erforderlich!
+            </p>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-2 mb-4">
           {pokemon.availableMoves.map((move, index) => {
             const isSelected = selectedMoves.find((m) => m.name === move.name);
             const canAdd =
@@ -69,24 +96,24 @@ export default function MoveSelection({
                 disabled={!canAdd}
                 className={`h-16 text-xs leading-tight ${
                   !canAdd ? "opacity-50" : ""
-                }`}
+                } ${move.maxCooldown === 0 ? "ring-2 ring-yellow-400" : ""}`}
               >
-                <div className="flex flex-col items-center">
-                  <span className="font-bold">{move.name}</span>
-                  <span className="text-xs opacity-75 mt-1">
+                <div>
+                  <div className="font-bold">{move.name}</div>
+                  <div className="text-xs">
                     {move.type.toUpperCase()} | {move.power} PWR | COST:{" "}
                     {move.cost} | CD: {move.maxCooldown}
-                  </span>
+                  </div>
                 </div>
               </RetroButton>
             );
           })}
         </div>
 
-        <div className="mt-4 flex justify-center gap-2">
+        <div className="flex gap-2 justify-center">
           <RetroButton
-            onClick={() => onConfirm(selectedMoves)}
-            disabled={selectedMoves.length !== 4}
+            onClick={handleConfirm}
+            disabled={!canConfirm()}
             variant="primary"
           >
             BESTÄTIGEN
