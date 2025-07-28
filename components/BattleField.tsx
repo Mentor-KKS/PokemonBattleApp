@@ -70,7 +70,7 @@ export default function BattleField({
       {/* Enemy Pokemon Info Box - Top */}
       <div
         className="absolute top-4 right-48 transform -translate-x-1 z-10"
-        style={{ top: "200px" }}
+        style={{ top: "160px" }}
       >
         <div className="bg-gameboy-light border-2 border-black p-2 md:p-3 rounded shadow-lg">
           <div className="pixel-font text-xs md:text-sm font-bold text-gameboy-darkest mb-1 md:mb-2">
@@ -93,7 +93,7 @@ export default function BattleField({
       </div>
 
       {/* Enemy Pokemon Sprite - Top Right */}
-      <div className="absolute right-1 md:right-20" style={{ top: "260px" }}>
+      <div className="absolute right-1 md:right-20" style={{ top: "220px" }}>
         <div
           className={`relative transition-all duration-300 ${
             battleAnimation.target === "enemy" &&
